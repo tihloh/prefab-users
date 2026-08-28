@@ -404,18 +404,41 @@ final class UserManager
         }
 
         if (!$this->provider) {
-            $this->provider = DefaultUserStorage::provider($this->config);
+            $table = (string) ($this->config['table'] ?? 'users');
+            $this->database = DefaultUserStorage::database($this->config);
+            $this->provider = new PdoUserProvider(
+                $this->database,
+                new UserMap(table: $table),
+            );
+
+            PrefabRuntime::recordResolution(
+                'users',
+                'database',
+                'automatic-sqlite-fallback',
+                [
+                    'driver' => $this->database->driver(),
+                    'path' => DefaultUserStorage::path($this->config),
+                ],
+            );
             PrefabRuntime::recordResolution(
                 'users',
                 'user_provider',
                 'automatic-sqlite-fallback',
-                [
-                    'provider' => $this->provider::class,
+                ['provider' => $this->provider::class, 'table' => $table],
+            );
+
+            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');
+            PrefabRuntime::provide(
+                'database',
+                $this->database,
+                'prefab-users',
+                priority: -10,
+                meta: [
+                    'role' => 'users-database',
+                    'driver' => $this->database->driver(),
                     'path' => DefaultUserStorage::path($this->config),
-                    'table' => (string) ($this->config['table'] ?? 'users'),
                 ],
             );
-            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');
         }
 
         return $this->provider;
