@@ -105,6 +105,8 @@ final class UserManager
                     ? $map['value']
                     : new UserMap((string) $table['value']);
 
+                DefaultUserStorage::ensureSchema($database, $userMap);
+
                 $this->provider = new PdoUserProvider(
                     $database,
                     $userMap,
