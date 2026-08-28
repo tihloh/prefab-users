@@ -1,0 +1,27 @@
+name: Patch fallback database capability
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/patch-publish-fallback-db.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/Services/UserManager.php')
+          s=p.read_text()
+          old='''        if (!$this->provider) {\n            $this->provider = DefaultUserStorage::provider($this->config);\n            PrefabRuntime::recordResolution(\n                'users',\n                'user_provider',\n                'automatic-sqlite-fallback',\n                [\n                    'provider' => $this->provider::class,\n                    'path' => DefaultUserStorage::path($this->config),\n                    'table' => (string) ($this->config['table'] ?? 'users'),\n                ],\n            );\n            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');\n        }'''
+          new='''        if (!$this->provider) {\n            $table = (string) ($this->config['table'] ?? 'users');\n            $this->database = DefaultUserStorage::database($this->config);\n            $this->provider = new PdoUserProvider(\n                $this->database,\n                new UserMap(table: $table),\n            );\n\n            PrefabRuntime::recordResolution(\n                'users',\n                'database',\n                'automatic-sqlite-fallback',\n                [\n                    'driver' => $this->database->driver(),\n                    'path' => DefaultUserStorage::path($this->config),\n                ],\n            );\n            PrefabRuntime::recordResolution(\n                'users',\n                'user_provider',\n                'automatic-sqlite-fallback',\n                ['provider' => $this->provider::class, 'table' => $table],\n            );\n\n            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');\n            PrefabRuntime::provide(\n                'database',\n                $this->database,\n                'prefab-users',\n                priority: -10,\n                meta: [\n                    'role' => 'users-database',\n                    'driver' => $this->database->driver(),\n                    'path' => DefaultUserStorage::path($this->config),\n                ],\n            );\n        }'''
+          if old not in s: raise SystemExit('fallback block not found')
+          p.write_text(s.replace(old,new))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/Services/UserManager.php
+          git commit -m 'Publish zero-config Users database for other modules'
+          git push
