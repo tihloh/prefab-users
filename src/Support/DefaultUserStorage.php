@@ -4,6 +4,8 @@ namespace Tihloh\Prefab\Users\Support;
 
 use PDO;
 use RuntimeException;
+use Tihloh\Prefab\DatabaseInterface;
+use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\Users\Contracts\UserProviderInterface;
 use Tihloh\Prefab\Users\Mapping\UserMap;
 use Tihloh\Prefab\Users\Repositories\PdoUserProvider;
@@ -14,7 +16,7 @@ use Tihloh\Prefab\Users\Repositories\PdoUserProvider;
  */
 final class DefaultUserStorage
 {
-    public static function provider(array $config = []): UserProviderInterface
+    public static function database(array $config = []): DatabaseInterface
     {
         if (!extension_loaded('pdo_sqlite')) {
             throw new RuntimeException(
@@ -38,12 +40,22 @@ final class DefaultUserStorage
         self::assertIdentifier($table);
         self::ensureSchema($pdo, $table);
 
-        return new PdoUserProvider($pdo, new UserMap(table: $table));
+        return new PdoDatabaseAdapter($pdo);
+    }
+
+    public static function provider(array $config = []): UserProviderInterface
+    {
+        $table = (string) ($config['table'] ?? 'users');
+
+        return new PdoUserProvider(
+            self::database($config),
+            new UserMap(table: $table),
+        );
     }
 
     public static function path(array $config = []): string
     {
-        $configured = $config['sqlite_path'] ?? getenv('PREFAB_USERS_SQLITE_PATH') ?: null;
+        $configured = $config['sqlite_path'] ?? (getenv('PREFAB_USERS_SQLITE_PATH') ?: null);
         if (is_string($configured) && trim($configured) !== '') {
             return self::absolutePath($configured);
         }
