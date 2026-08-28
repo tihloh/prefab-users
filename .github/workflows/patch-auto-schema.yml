@@ -1,0 +1,40 @@
+name: Patch automatic Users schema
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/patch-auto-schema.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/Services/UserManager.php')
+          s=p.read_text()
+          old="""                $userMap = $map['value'] instanceof UserMap
+                    ? $map['value']
+                    : new UserMap((string) $table['value']);
+
+                $this->provider = new PdoUserProvider(
+"""
+          new="""                $userMap = $map['value'] instanceof UserMap
+                    ? $map['value']
+                    : new UserMap((string) $table['value']);
+
+                DefaultUserStorage::ensureSchema($database, $userMap);
+
+                $this->provider = new PdoUserProvider(
+"""
+          if old not in s:
+              raise SystemExit('target block not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/Services/UserManager.php
+          git commit -m 'Automatically create mapped users table'
+          git push
