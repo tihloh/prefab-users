@@ -14,6 +14,7 @@ use Tihloh\Prefab\Users\DTOs\OperationResult;
 use Tihloh\Prefab\Users\Mapping\UserMap;
 use Tihloh\Prefab\Users\Repositories\PdoUserProvider;
 use Tihloh\Prefab\Users\User\PrefabUser;
+use Tihloh\Prefab\Users\Support\DefaultUserStorage;
 
 /**
  * Main service API for Prefab Users.
@@ -399,9 +400,22 @@ final class UserManager
     private function provider(): UserProviderInterface
     {
         if (!$this->provider) {
-            throw new RuntimeException(
-                'Prefab Users needs a provider or database capability/configuration.',
+            $this->prefabConfigure();
+        }
+
+        if (!$this->provider) {
+            $this->provider = DefaultUserStorage::provider($this->config);
+            PrefabRuntime::recordResolution(
+                'users',
+                'user_provider',
+                'automatic-sqlite-fallback',
+                [
+                    'provider' => $this->provider::class,
+                    'path' => DefaultUserStorage::path($this->config),
+                    'table' => (string) ($this->config['table'] ?? 'users'),
+                ],
             );
+            PrefabRuntime::provide('user_provider', $this->provider, 'prefab-users');
         }
 
         return $this->provider;
