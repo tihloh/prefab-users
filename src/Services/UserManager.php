@@ -26,6 +26,7 @@ final class UserManager
     private ?object $autoLogger = null;
     private ?object $actorProvider = null;
     private ?object $groups = null;
+    private bool $loggingEnabled = true;
 
     public function __construct(UserProviderInterface|array|null $provider = null)
     {
@@ -40,6 +41,13 @@ final class UserManager
 
     public function prefabConfigure(): void
     {
+        $logging = PrefabConfig::resolve('users', 'logging', $this->config, ['enabled' => true]);
+        $loggingValue = $logging['value'];
+        $this->loggingEnabled = is_array($loggingValue)
+            ? (bool) ($loggingValue['enabled'] ?? true)
+            : (bool) $loggingValue;
+        PrefabRuntime::recordResolution('users', 'logging', $logging['source'], ['enabled' => $this->loggingEnabled]);
+
         if (!$this->provider) {
             $provider = PrefabConfig::resolve('users', 'provider', $this->config);
             if ($provider['value'] instanceof UserProviderInterface) {
@@ -104,7 +112,7 @@ final class UserManager
             PrefabRuntime::provide('group_provider', $this->groups, 'prefab-users', priority: 10);
         }
 
-        if (!$this->autoLogger) {
+        if ($this->loggingEnabled && !$this->autoLogger) {
             $this->resolveAutoLogger();
         }
         if (!$this->actorProvider) {
@@ -333,6 +341,7 @@ final class UserManager
 
     private function resolveAutoLogger(): ?object
     {
+        if (!$this->loggingEnabled) { return null; }
         $logger = PrefabRuntime::resolveEntry('logger');
         if (!$logger) {
             return null;
@@ -344,12 +353,14 @@ final class UserManager
 
     private function result(mixed $data, array $log): OperationResult
     {
-        if ($this->events && method_exists($this->events, 'dispatch')) {
-            $this->events->dispatch('prefab.log', $log);
-        } else {
-            $logger = $this->autoLogger ?? $this->resolveAutoLogger();
-            if ($logger && method_exists($logger, 'record')) {
-                $logger->record($log);
+        if ($this->loggingEnabled) {
+            if ($this->events && method_exists($this->events, 'dispatch')) {
+                $this->events->dispatch('prefab.log', $log);
+            } else {
+                $logger = $this->autoLogger ?? $this->resolveAutoLogger();
+                if ($logger && method_exists($logger, 'record')) {
+                    $logger->record($log);
+                }
             }
         }
         return new OperationResult(data: $data, log: $log);
@@ -411,12 +422,26 @@ final class UserManager
         array $context,
     ): array {
         $context = $this->context($context);
+        $scopeType = strtoupper((string) ($context['scope_type'] ?? 'USER'));
+        $scopePath = $context['scope_path'] ?? ($scopeType === 'USER' ? (string) $subjectId : null);
+        $visibility = strtoupper((string) ($context['visibility'] ?? match ($scopeType) {
+            'USER' => 'USER',
+            'ORGANIZATION' => 'ORGANIZATION',
+            default => 'ADMIN',
+        }));
         return [
+            'classification' => 'AUDIT',
+            'level' => $action === 'user.deleted' ? 'NOTICE' : 'INFO',
+            'module' => 'users',
             'action' => $action,
+            'scope_type' => $scopeType,
+            'scope_path' => $scopePath,
+            'visibility' => $visibility,
             'subject_type' => 'user',
             'subject_id' => $subjectId,
             'actor_type' => $context['actor_type'] ?? null,
             'actor_id' => $context['actor_id'] ?? null,
+            'status' => 'SUCCESS',
             'message' => $message,
             'changes' => $changes,
             'metadata' => $context['metadata'] ?? [],
