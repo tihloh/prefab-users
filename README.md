@@ -281,7 +281,7 @@ This means a small application can configure Users explicitly, while a larger Pr
 
 ---
 
-# 10. Prefab Database integration
+# 11. Prefab Database integration
 
 When Prefab Database is present, Users can inherit a compatible database capability:
 
@@ -310,7 +310,7 @@ Users does not require Prefab Database; it merely knows how to cooperate with th
 
 ---
 
-# 10. Database abstraction
+# 11. Database abstraction
 
 The built-in database provider accepts either:
 
@@ -337,7 +337,7 @@ This design allows future Laravel, Doctrine or other framework adapters to provi
 
 ---
 
-# 11. Custom provider
+# 12. Custom provider
 
 Applications are not limited to the built-in database provider. A custom provider can implement the appropriate Users provider contract and supply users from another source.
 
@@ -355,7 +355,7 @@ This keeps the manager independent of one persistence strategy.
 
 ---
 
-# 12. Custom user class
+# 13. Custom user class
 
 Projects may extend `PrefabUser` with domain-specific behavior:
 
@@ -377,7 +377,7 @@ This preserves a common Prefab contract without removing project-specific behavi
 
 ---
 
-# 13. Prefab Auth integration
+# 14. Prefab Auth integration
 
 Users can expose the user-provider capability needed by Prefab Auth:
 
@@ -395,7 +395,7 @@ Neither package must become a hard dependency of the other.
 
 ---
 
-# 14. Prefab Permissions integration
+# 15. Prefab Permissions integration
 
 Users and Permissions can cooperate while retaining separate responsibilities:
 
@@ -413,7 +413,7 @@ The project remains free to define its own user/group model as long as the appro
 
 ---
 
-# 15. Prefab Logs integration
+# 16. Prefab Logs integration
 
 When a compatible logger is available, Users can emit activity records for operations such as user creation, modification and deletion.
 
@@ -428,7 +428,7 @@ This cooperation is optional.
 
 ---
 
-# 16. HTTP usage
+# 17. HTTP usage
 
 `Http\UserController` is transport-neutral and returns arrays suitable for JSON serialization.
 
@@ -446,7 +446,7 @@ Prefab Users itself does not force those URLs or require a router. Prefab Routes
 
 ---
 
-# 17. Diagnostics
+# 18. Diagnostics
 
 Use:
 
@@ -464,7 +464,7 @@ without exposing actual database connection objects or sensitive configuration v
 
 ---
 
-# 18. Practical small application
+# 19. Practical small application
 
 ```php
 $users = new UserManager([
@@ -479,7 +479,7 @@ That is enough for a small project. No global configuration or other Prefab modu
 
 ---
 
-# 19. Practical modular application
+# 20. Practical modular application
 
 ```php
 PrefabConfig::set([
@@ -514,7 +514,7 @@ Each module remains independently configurable.
 
 ---
 
-# 20. API quick reference
+# 21. API quick reference
 
 Common `UserManager` operations:
 
@@ -540,7 +540,7 @@ Important extension points:
 
 ---
 
-# 21. Design philosophy
+# 22. Design philosophy
 
 Prefab Users is an adapter around the project's user domain, not a demand to replace it.
 
