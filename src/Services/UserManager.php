@@ -389,14 +389,19 @@ final class UserManager
 
     private function result(mixed $data, array $log): OperationResult
     {
-        if ($this->events && method_exists($this->events, 'dispatch')) {
-            $this->events->dispatch('prefab.log', $log);
-        } else {
-            $logger = $this->autoLogger ?? $this->resolveAutoLogger();
-            if ($logger && method_exists($logger, 'record')) {
-                $logger->record($log);
+        try {
+            if ($this->events && method_exists($this->events, 'dispatch')) {
+                $this->events->dispatch('prefab.log', $log);
+            } else {
+                $logger = $this->autoLogger ?? $this->resolveAutoLogger();
+                if ($logger && method_exists($logger, 'record')) {
+                    $logger->record($log);
+                }
             }
+        } catch (\Throwable $e) {
+            error_log('Prefab Users logging failed: ' . $e->getMessage());
         }
+
         return new OperationResult(data: $data, log: $log);
     }
 
