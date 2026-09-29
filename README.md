@@ -557,3 +557,86 @@ optional Auth / Permissions / Logs
 Small projects can configure a provider directly. Larger systems can inherit shared database and integration capabilities automatically.
 
 The core principle remains the same: **your project owns its users; Prefab makes them reusable.**
+
+
+---
+
+# 23. Organizations
+
+Prefab Users can optionally manage organizations and organization memberships through the same configured database:
+
+```php
+$organizations = $users->organizations();
+
+$org = $organizations->create([
+    'code' => 'PBO',
+    'name' => 'Provincial Budget Office',
+    'type' => 'office',
+]);
+
+$organizations->requestJoin($userId, $org->id);
+$organizations->approve($org->id, $userId, $organizationAdminId);
+```
+
+Organizations support parent/child structure, active/inactive organizations, multiple memberships per user, one primary membership, and membership states:
+
+```text
+pending
+active
+rejected
+suspended
+```
+
+Membership roles are deliberately small:
+
+```text
+member
+admin
+```
+
+An active organization admin can approve, reject, suspend and remove ordinary members of that organization.
+
+## Organization administrator protection
+
+Changing an organization administrator is a global administrative operation. An organization admin cannot promote another member to admin, demote an admin, or otherwise change another admin's membership.
+
+Applications provide the global-admin policy through `organization_admin_authorizer`:
+
+```php
+PrefabConfig::set([
+    'modules' => [
+        'users' => [
+            'organization_admin_authorizer' => function (
+                int|string $actorId,
+                int|string $organizationId,
+            ) use ($permissions): bool {
+                return $permissions->can($actorId, 'organizations.admins.manage');
+            },
+        ],
+    ],
+]);
+```
+
+Without an authorizer, Prefab Users refuses organization-admin changes.
+
+This keeps Prefab Users independent of Prefab Permissions while still enforcing the boundary that only a host-authorized global administrator can create, remove or modify organization administrators.
+
+Useful APIs include:
+
+| API | Purpose |
+|---|---|
+| `organizations()->all()` | List organizations |
+| `organizations()->find()` | Find an organization |
+| `organizations()->members()` | List memberships in an organization |
+| `organizations()->membershipsForUser()` | List a user's memberships |
+| `organizations()->organizationIdsForUser()` | Active organization IDs for a user |
+| `organizations()->administeredOrganizationIds()` | Organizations where a user is an active org admin |
+| `organizations()->requestJoin()` | Request membership |
+| `organizations()->approve()` | Approve a pending/ordinary membership |
+| `organizations()->reject()` | Reject a membership request |
+| `organizations()->setStatus()` | Activate/suspend/reject ordinary membership |
+| `organizations()->setPrimary()` | Set the user's primary organization |
+| `organizations()->setAdmin()` | Promote/demote an org admin; requires global authorizer |
+| `organizations()->remove()` | Remove a membership; admin targets require global authorizer |
+
+Organization membership is separate from application groups. Groups remain authorization/inheritance constructs; organizations model ownership and administrative scope.
