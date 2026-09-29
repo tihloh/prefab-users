@@ -26,6 +26,7 @@ final class UserManager
     private ?object $autoLogger = null;
     private ?object $actorProvider = null;
     private ?object $groups = null;
+    private ?object $organizations = null;
 
     public function __construct(UserProviderInterface|array|null $provider = null)
     {
@@ -104,6 +105,30 @@ final class UserManager
             PrefabRuntime::provide('group_provider', $this->groups, 'prefab-users', priority: 10);
         }
 
+        $organizationEntry = PrefabRuntime::resolveEntry('organization_provider');
+        if ($organizationEntry && $organizationEntry['provider'] !== 'prefab-users') {
+            $candidate = $organizationEntry['value'];
+            if (is_object($candidate) && method_exists($candidate, 'organizationIdsForUser')) {
+                $this->organizations = $candidate;
+                PrefabRuntime::recordResolution('users', 'organization_provider', 'prefab-capability', ['provider' => $organizationEntry['provider']]);
+            }
+        }
+        if (!$this->organizations && $this->database) {
+            $authorizer = PrefabConfig::resolve(
+                'users',
+                'organization_admin_authorizer',
+                $this->config,
+            )['value'];
+            $this->organizations = new OrganizationManager(
+                $this->database,
+                is_callable($authorizer) ? $authorizer : null,
+            );
+            PrefabRuntime::recordResolution('users', 'organization_provider', 'users-database', ['provider' => OrganizationManager::class]);
+        }
+        if ($this->organizations) {
+            PrefabRuntime::provide('organization_provider', $this->organizations, 'prefab-users', priority: 10);
+        }
+
         if (!$this->autoLogger) {
             $this->resolveAutoLogger();
         }
@@ -122,6 +147,7 @@ final class UserManager
             'database' => $this->database,
             'user_provider' => $this->provider,
             'group_provider' => $this->groups,
+            'organization_provider' => $this->organizations,
             default => null,
         };
     }
@@ -157,6 +183,15 @@ final class UserManager
         }
         return $this->groups
             ?? throw new RuntimeException('Prefab Users groups need a database or compatible group_provider capability.');
+    }
+
+    public function organizations(): object
+    {
+        if (!$this->organizations) {
+            $this->prefabConfigure();
+        }
+        return $this->organizations
+            ?? throw new RuntimeException('Prefab Users organizations need a database or compatible organization_provider capability.');
     }
 
     public function find(int|string $id): ?PrefabUser
@@ -371,6 +406,19 @@ final class UserManager
             if (!$this->groups) {
                 $this->groups = new GroupManager($this->database);
                 PrefabRuntime::provide('group_provider', $this->groups, 'prefab-users', priority: 10);
+            }
+
+            if (!$this->organizations) {
+                $authorizer = PrefabConfig::resolve(
+                    'users',
+                    'organization_admin_authorizer',
+                    $this->config,
+                )['value'];
+                $this->organizations = new OrganizationManager(
+                    $this->database,
+                    is_callable($authorizer) ? $authorizer : null,
+                );
+                PrefabRuntime::provide('organization_provider', $this->organizations, 'prefab-users', priority: 10);
             }
         }
         return $this->provider;
