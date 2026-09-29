@@ -319,6 +319,9 @@ final class OrganizationManager
         }
 
         $current = $this->membership($organizationId, $userId);
+        if ($current?->role === 'admin' && !$this->mayManageAdmins($actorId, $organizationId)) {
+            throw new RuntimeException('Only an authorized global administrator may manage an organization administrator.');
+        }
         $role = $current?->role ?? 'member';
         $this->upsertMembership($organizationId, $userId, $role, 'active', $current?->isPrimary ?? false, $actorId);
 
@@ -336,6 +339,9 @@ final class OrganizationManager
         }
         $current = $this->membership($organizationId, $userId)
             ?? throw new RuntimeException('Organization membership not found.');
+        if ($current->role === 'admin' && !$this->mayManageAdmins($actorId, $organizationId)) {
+            throw new RuntimeException('Only an authorized global administrator may manage an organization administrator.');
+        }
         $this->upsertMembership($organizationId, $userId, $current->role, 'rejected', false, null);
         return $this->membership($organizationId, $userId)
             ?? throw new RuntimeException('Organization membership could not be reloaded.');
@@ -354,6 +360,9 @@ final class OrganizationManager
 
         $current = $this->membership($organizationId, $userId)
             ?? throw new RuntimeException('Organization membership not found.');
+        if ($current->role === 'admin' && !$this->mayManageAdmins($actorId, $organizationId)) {
+            throw new RuntimeException('Only an authorized global administrator may manage an organization administrator.');
+        }
         $this->upsertMembership(
             $organizationId,
             $userId,
@@ -459,6 +468,7 @@ final class OrganizationManager
             'status' => $status,
             'is_primary' => (int)$isPrimary,
             'approved_by' => $approvedBy === null ? null : (string)$approvedBy,
+            'approved_at' => $status === 'active' ? date('Y-m-d H:i:s') : null,
         ];
 
         $driver = $this->database->driver();
@@ -466,7 +476,7 @@ final class OrganizationManager
             'sqlite' => "INSERT INTO prefab_organization_users
                 (organization_id,user_id,role,status,is_primary,approved_at,approved_by,requested_at,created_at,updated_at)
                 VALUES (:organization_id,:user_id,:role,:status,:is_primary,
-                    CASE WHEN :status='active' THEN CURRENT_TIMESTAMP ELSE NULL END,:approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    :approved_at,:approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
                 ON CONFLICT(organization_id,user_id) DO UPDATE SET
                     role=excluded.role,status=excluded.status,is_primary=excluded.is_primary,
                     approved_at=CASE WHEN excluded.status='active' THEN CURRENT_TIMESTAMP ELSE NULL END,
@@ -474,27 +484,27 @@ final class OrganizationManager
             'pgsql' => "INSERT INTO prefab_organization_users
                 (organization_id,user_id,role,status,is_primary,approved_at,approved_by,requested_at,created_at,updated_at)
                 VALUES (:organization_id,:user_id,:role,:status,:is_primary,
-                    CASE WHEN :status='active' THEN CURRENT_TIMESTAMP ELSE NULL END,:approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    :approved_at,:approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
                 ON CONFLICT(organization_id,user_id) DO UPDATE SET
                     role=EXCLUDED.role,status=EXCLUDED.status,is_primary=EXCLUDED.is_primary,
                     approved_at=CASE WHEN EXCLUDED.status='active' THEN CURRENT_TIMESTAMP ELSE NULL END,
                     approved_by=EXCLUDED.approved_by,updated_at=CURRENT_TIMESTAMP",
             'sqlsrv' => "MERGE prefab_organization_users AS target
-                USING (SELECT :organization_id organization_id,:user_id user_id,:role role,:status status,:is_primary is_primary,:approved_by approved_by) source
+                USING (SELECT :organization_id organization_id,:user_id user_id,:role role,:status status,:is_primary is_primary,:approved_at approved_at,:approved_by approved_by) source
                 ON target.organization_id=source.organization_id AND target.user_id=source.user_id
                 WHEN MATCHED THEN UPDATE SET role=source.role,status=source.status,is_primary=source.is_primary,
-                    approved_at=CASE WHEN source.status='active' THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    approved_at=source.approved_at,
                     approved_by=source.approved_by,updated_at=CURRENT_TIMESTAMP
                 WHEN NOT MATCHED THEN INSERT
                     (organization_id,user_id,role,status,is_primary,approved_at,approved_by,requested_at,created_at,updated_at)
                     VALUES (source.organization_id,source.user_id,source.role,source.status,source.is_primary,
-                    CASE WHEN source.status='active' THEN CURRENT_TIMESTAMP ELSE NULL END,source.approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);",
+                    source.approved_at,source.approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);",
             'mysql' => "INSERT INTO prefab_organization_users
                 (organization_id,user_id,role,status,is_primary,approved_at,approved_by,requested_at,created_at,updated_at)
                 VALUES (:organization_id,:user_id,:role,:status,:is_primary,
-                    IF(:status='active',CURRENT_TIMESTAMP,NULL),:approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    :approved_at,:approved_by,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
                 ON DUPLICATE KEY UPDATE role=VALUES(role),status=VALUES(status),is_primary=VALUES(is_primary),
-                    approved_at=IF(VALUES(status)='active',CURRENT_TIMESTAMP,NULL),
+                    approved_at=VALUES(approved_at),
                     approved_by=VALUES(approved_by),updated_at=CURRENT_TIMESTAMP",
             default => throw new RuntimeException("Unsupported organization database driver '{$driver}'."),
         };
