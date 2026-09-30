@@ -580,7 +580,7 @@ final class OrganizationManager
 
     private function assertStatus(string $status): void
     {
-        if (!in_array($status, ['pending', 'action_required', 'active', 'rejected', 'suspended'], true)) {
+        if (!in_array($status, ['pending', 'on_hold', 'action_required', 'active', 'rejected', 'suspended'], true)) {
             throw new InvalidArgumentException("Unsupported organization membership status '{$status}'.");
         }
     }
