@@ -309,6 +309,40 @@ final class OrganizationManager
             ?? throw new RuntimeException('Organization membership could not be reloaded.');
     }
 
+    /**
+     * Withdraw a user's own pending organization join request.
+     *
+     * This is intentionally self-service and only removes a pending
+     * membership request. Active/suspended memberships must be managed
+     * through the normal organization administration flow.
+     */
+    public function cancelJoinRequest(
+        int|string $userId,
+        int|string $organizationId,
+    ): bool {
+        $current = $this->membership($organizationId, $userId);
+        if (!$current) {
+            return false;
+        }
+
+        if ($current->status !== 'pending') {
+            throw new RuntimeException('Only a pending organization request can be cancelled.');
+        }
+
+        $this->database->statement(
+            "DELETE FROM prefab_organization_users
+             WHERE organization_id=:organization_id
+               AND user_id=:user_id
+               AND status='pending'",
+            [
+                'organization_id' => $organizationId,
+                'user_id' => (string)$userId,
+            ],
+        );
+
+        return true;
+    }
+
     public function approve(
         int|string $organizationId,
         int|string $userId,
