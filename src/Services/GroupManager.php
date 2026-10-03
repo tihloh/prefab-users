@@ -5,6 +5,7 @@ namespace Tihloh\Prefab\Users\Services;
 use RuntimeException;
 use Tihloh\Prefab\DatabaseInterface;
 use Tihloh\Prefab\Users\DTOs\Group;
+use Tihloh\Prefab\Users\Support\CompactId;
 
 final class GroupManager
 {
@@ -16,13 +17,13 @@ final class GroupManager
     public function ensureSchema(): void
     {
         if ($this->database->driver() === 'sqlite') {
-            $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(191) NOT NULL UNIQUE, description VARCHAR(255) NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)');
-            $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_user_groups (user_id VARCHAR(191) NOT NULL, group_id INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, group_id), FOREIGN KEY (group_id) REFERENCES prefab_groups(id) ON DELETE CASCADE)');
+            $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_groups (id VARCHAR(16) PRIMARY KEY, name VARCHAR(191) NOT NULL UNIQUE, description VARCHAR(255) NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)');
+            $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_user_groups (user_id VARCHAR(191) NOT NULL, group_id VARCHAR(16) NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, group_id), FOREIGN KEY (group_id) REFERENCES prefab_groups(id) ON DELETE CASCADE)');
             return;
         }
 
-        $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_groups (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(191) NOT NULL, description VARCHAR(255) NULL, created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uq_prefab_group_name (name))');
-        $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_user_groups (user_id VARCHAR(191) NOT NULL, group_id BIGINT UNSIGNED NOT NULL, created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, group_id), INDEX idx_prefab_user_groups_group (group_id), CONSTRAINT fk_prefab_user_groups_group FOREIGN KEY (group_id) REFERENCES prefab_groups(id) ON DELETE CASCADE)');
+        $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_groups (id VARCHAR(16) NOT NULL PRIMARY KEY, name VARCHAR(191) NOT NULL, description VARCHAR(255) NULL, created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uq_prefab_group_name (name))');
+        $this->database->statement('CREATE TABLE IF NOT EXISTS prefab_user_groups (user_id VARCHAR(191) NOT NULL, group_id VARCHAR(16) NOT NULL, created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, group_id), INDEX idx_prefab_user_groups_group (group_id), CONSTRAINT fk_prefab_user_groups_group FOREIGN KEY (group_id) REFERENCES prefab_groups(id) ON DELETE CASCADE)');
     }
 
     /** @return list<Group> */
@@ -41,9 +42,12 @@ final class GroupManager
 
     public function create(string $name, ?string $description = null): Group
     {
-        $this->database->statement('INSERT INTO prefab_groups (name, description) VALUES (:name, :description)', ['name' => $name, 'description' => $description]);
-        $id = $this->database->lastInsertId();
-        return $this->find($id ?: throw new RuntimeException('Group ID unavailable.')) ?? throw new RuntimeException('Group could not be reloaded.');
+        $id = CompactId::make();
+        $this->database->statement(
+            'INSERT INTO prefab_groups (id, name, description) VALUES (:id, :name, :description)',
+            ['id' => $id, 'name' => $name, 'description' => $description]
+        );
+        return $this->find($id) ?? throw new RuntimeException('Group could not be reloaded.');
     }
 
     public function update(int|string $id, array $data): Group
